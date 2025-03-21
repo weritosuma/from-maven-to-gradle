@@ -1,35 +1,40 @@
-Вот **полный пример** с **Lombok**, **MapStruct**, **Liquibase** и комментариями об аналогах Maven:
+Вот **полный пример** с **подробными комментариями об аналогах Maven**, сохраняя логику для разработчика, знающего Maven:
 
 ---
 
 ### **Структура проекта**
 ```
-parent-project/
-├── settings.gradle       // Аналог <modules> в Maven
-├── gradle.properties     // Аналог <properties>
-├── build.gradle          // Корневая конфигурация
-├── parent/               // BOM-модуль (аналог <dependencyManagement>)
+parent-project/              // Корневая директория (аналог <project>)
+├── settings.gradle          // Аналог <modules> в Maven
+├── gradle.properties        // Аналог <properties>
+├── build.gradle             // Корневая конфигурация (аналог pom.xml)
+├── parent/                  // BOM-модуль (аналог <dependencyManagement>)
 │   └── build.gradle
-├── impl/                 // Модуль реализации
+├── impl/                    // Модуль реализации (аналог <module>)
 │   └── build.gradle
-└── db/                   // Модуль БД с Liquibase
+└── db/                      // Модуль БД с Liquibase
     ├── build.gradle
-    └── liquibase.properties  // Конфигурация Liquibase
+    └── liquibase.properties // Конфигурация Liquibase (аналог <configuration>)
 ```
 
 ---
 
 ### **`gradle.properties` (аналог `<properties>`)
 ```properties
-# Версии зависимостей
-springBootVersion=3.1.2     // ${spring-boot.version}
-javaVersion=17              // maven.compiler.source
+# Версии зависимостей (аналог <properties> в Maven)
+springBootVersion=3.1.2      // ${spring-boot.version}
+javaVersion=17               // maven.compiler.source
 mapstructVersion=1.5.5.Final // mapstruct.version
-lombokVersion=1.18.30       // lombok.version
-postgresqlVersion=42.6.0    // postgresql.version
-liquibaseVersion=4.23.1     // liquibase.version
+lombokVersion=1.18.30        // lombok.version
+postgresqlVersion=42.6.0     // postgresql.version
+liquibaseVersion=4.23.1      // liquibase.version
 
-# Nexus репозиторий
+# Версии плагинов (аналог <pluginManagement>)
+lombokPluginVersion=8.0.1    // io.freefair.lombok
+mapstructPluginVersion=0.21  // net.ltgt.apt
+liquibasePluginVersion=2.2.0 // org.liquibase.gradle
+
+# Nexus репозиторий (аналог <distributionManagement>)
 nexusUrl=https://nexus.example.com/repository/maven-releases/
 nexusUser=deployer
 nexusPassword=secure_password_123
@@ -50,8 +55,9 @@ rootProject.name = 'parent-project'  // <artifactId> корневого прое
 plugins {
     id 'java'  // Аналог maven-compiler-plugin
     id 'org.springframework.boot' version "${springBootVersion}" apply false  // spring-boot-maven-plugin
-    id 'maven-publish'  // maven-deploy-plugin
-    id 'net.ltgt.apt' version '0.21'  // Поддержка аннотационных процессоров (аналог maven-processor-plugin)
+    id 'maven-publish'  // Аналог maven-deploy-plugin
+    id 'net.ltgt.apt' version "${mapstructPluginVersion}" apply false  // Поддержка аннотационных процессоров
+    id 'io.freefair.lombok' version "${lombokPluginVersion}" apply false  // Аналог lombok-maven-plugin
 }
 
 java {
@@ -61,11 +67,11 @@ java {
 }
 
 repositories {
-    mavenCentral()  // Центральный репозиторий
+    mavenCentral()  // Центральный репозиторий (аналог <repository>)
     maven {         // Приватный Nexus (аналог <repository> + <server>)
         url = nexusUrl
         credentials {
-            username = nexusUser
+            username = nexusUser  // ${nexusUser} из properties
             password = nexusPassword
         }
     }
@@ -73,7 +79,8 @@ repositories {
 
 subprojects {
     apply plugin: 'java'
-    apply plugin: 'net.ltgt.apt'  // Включаем поддержку аннотационных процессоров
+    apply plugin: 'net.ltgt.apt'  // Для MapStruct (аналог maven-processor-plugin)
+    apply plugin: 'io.freefair.lombok'  // Для Lombok
     
     repositories {
         mavenCentral()
@@ -93,7 +100,7 @@ publishing {  // Аналог <distributionManagement>
 
 ---
 
-### **`parent/build.gradle` (BOM-модуль)
+### **`parent/build.gradle` (BOM-модуль, аналог `<dependencyManagement>`)
 ```groovy
 plugins {
     id 'java-platform'  // Плагин для создания BOM
@@ -101,14 +108,14 @@ plugins {
 
 dependencies {
     constraints {
-        // Spring Boot (аналог <dependencyManagement>)
+        // Spring Boot (аналог управления версиями в <dependencyManagement>)
         api "org.springframework.boot:spring-boot-starter:${springBootVersion}"
         
-        // MapStruct (аналог управления версиями в <dependencyManagement>)
+        // MapStruct (аналог <dependencyManagement>)
         api "org.mapstruct:mapstruct:${mapstructVersion}"
         annotationProcessor "org.mapstruct:mapstruct-processor:${mapstructVersion}"
         
-        // Lombok (аналог управления версиями)
+        // Lombok (аналог <dependencyManagement>)
         api "org.projectlombok:lombok:${lombokVersion}"
         annotationProcessor "org.projectlombok:lombok:${lombokVersion}"
         
@@ -123,15 +130,17 @@ dependencies {
 
 ---
 
-### **`impl/build.gradle` (модуль реализации)
+### **`impl/build.gradle` (модуль реализации, аналог `<module>`)
 ```groovy
 plugins {
     id 'org.springframework.boot'  // spring-boot-maven-plugin
+    id 'net.ltgt.apt'  // Для MapStruct (аналог maven-processor-plugin)
+    id 'io.freefair.lombok'  // Для Lombok
 }
 
 dependencies {
     implementation platform(project(':parent'))  // Аналог <parent>
-    implementation project(':db')  // Зависимость на модуль БД
+    implementation project(':db')  // Зависимость на другой модуль (аналог <dependency>)
     
     // Spring Web (аналог <dependency> без версии)
     implementation 'org.springframework.boot:spring-boot-starter-web'
@@ -140,17 +149,10 @@ dependencies {
     implementation 'org.mapstruct:mapstruct'
     annotationProcessor 'org.mapstruct:mapstruct-processor'
     
-    // Lombok (аналог <dependency> с scope=provided)
-    compileOnly 'org.projectlombok:lombok'
-    annotationProcessor 'org.projectlombok:lombok'
+    // Lombok (автоматически настраивается плагином)
     
     // PostgreSQL (версия из BOM)
     runtimeOnly 'org.postgresql:postgresql'
-}
-
-// Настройки Spring Boot (аналог spring-boot-maven-plugin)
-bootJar {
-    mainClass = 'com.example.Application'  // Аналог <start-class>
 }
 
 // Настройки MapStruct (аналог mapstruct-processor в Maven)
@@ -159,20 +161,25 @@ tasks.withType(JavaCompile) {
 }
 
 // Настройки Lombok (аналог lombok-maven-plugin)
-tasks.withType(JavaCompile) {
-    options.compilerArgs += [
-        "-A lombok.addLombokGeneratedAnnotation=true",
-        "-A lombok.addNullAnnotations=javax.annotation.Nonnull"
-    ]
+lombok {
+    version = lombokVersion  // Из gradle.properties
+    config.put("lombok.addLombokGeneratedAnnotation", "true")
+    config.put("lombok.addNullAnnotations", "javax.annotation.Nonnull")
+}
+
+// Настройки Spring Boot (аналог spring-boot-maven-plugin)
+bootJar {
+    mainClass = 'com.example.Application'  // Аналог <start-class>
 }
 ```
 
 ---
 
-### **`db/build.gradle` (модуль БД с Liquibase)
+### **`db/build.gradle` (модуль БД, аналог `<module>`)
 ```groovy
 plugins {
-    id 'org.liquibase.gradle' version '2.2.0'  // liquibase-maven-plugin
+    id 'org.liquibase.gradle' version "${liquibasePluginVersion}"  // liquibase-maven-plugin
+    id 'io.freefair.lombok'  // Для Lombok
 }
 
 // Загрузка настроек из файла (аналог <configuration><propertyFile>)
@@ -180,16 +187,14 @@ def liquibaseProps = new Properties()
 file("liquibase.properties").withInputStream { liquibaseProps.load(it) }
 
 dependencies {
-    implementation platform(project(':parent'))
+    implementation platform(project(':parent'))  // Аналог <parent>
     
-    // Lombok (аналог <dependency> с scope=provided)
-    compileOnly 'org.projectlombok:lombok'
-    annotationProcessor 'org.projectlombok:lombok'
+    // Lombok (автоматически настраивается плагином)
     
-    // PostgreSQL
+    // PostgreSQL (версия из BOM)
     runtimeOnly 'org.postgresql:postgresql'
     
-    // Liquibase
+    // Liquibase (аналог <dependency>)
     liquibaseRuntime 'org.liquibase:liquibase-core'
 }
 
@@ -217,7 +222,7 @@ task rollbackDB(type: org.liquibase.gradle.LiquibaseTask) {
 
 ---
 
-### **`db/liquibase.properties` (конфигурация Liquibase)
+### **`db/liquibase.properties` (аналог `<configuration>`)
 ```properties
 # Подключение к PostgreSQL (аналог <configuration> в Maven)
 url=jdbc:postgresql://localhost:5432/mydb
@@ -236,9 +241,9 @@ changeLogFile=src/main/resources/db/changelog-master.xml
 | `<dependencyManagement>`           | Модуль `parent` с `java-platform`              | Управление версиями  |
 | `mvn clean install`                | `./gradlew build`                              | Сборка проекта       |
 | `mvn deploy`                       | `./gradlew publish`                            | Публикация в Nexus   |
-| `lombok-maven-plugin`              | `compileOnly` + `annotationProcessor`          | В модулях `impl`/`db` |
-| `mapstruct-processor`              | `annotationProcessor` + `net.ltgt.apt`         | В модуле `impl`      |
-| `liquibase-maven-plugin`           | `org.liquibase.gradle`                         | В модуле `db`        |
+| `lombok-maven-plugin`              | `id 'io.freefair.lombok'`                      | В модулях `impl`/`db` |
+| `mapstruct-processor`              | `id 'net.ltgt.apt'` + `annotationProcessor`    | В модуле `impl`      |
+| `liquibase-maven-plugin`           | `id 'org.liquibase.gradle'`                    | В модуле `db`        |
 
 ---
 
@@ -262,31 +267,24 @@ changeLogFile=src/main/resources/db/changelog-master.xml
 
 ---
 
-### **Особенности**
-1. **Lombok**:
+### **Особенности для разработчика из Maven**
+1. **Зависимости**:
    ```groovy
-   compileOnly 'org.projectlombok:lombok'  // Аналог <scope>provided</scope>
-   annotationProcessor 'org.projectlombok:lombok'  // Аннотационный процессор
+   implementation 'org.springframework.boot:spring-boot-starter-web'  // Аналог <dependency> без версии
+   runtimeOnly 'org.postgresql:postgresql'  // Аналог <scope>runtime</scope>
    ```
 
-2. **MapStruct**:
+2. **Аннотационные процессоры**:
    ```groovy
-   implementation 'org.mapstruct:mapstruct'  // Основная зависимость
-   annotationProcessor 'org.mapstruct:mapstruct-processor'  // Генерация кода
+   annotationProcessor 'org.mapstruct:mapstruct-processor'  // Аналог maven-processor-plugin
    ```
 
 3. **Генерация кода**:
-   ```groovy
-   // Для MapStruct
-   options.annotationProcessorGeneratedSourcesDirectory = file("$buildDir/generated/sources/mapstruct")
-   
-   // Для Lombok
-   options.compilerArgs += ["-A lombok.addLombokGeneratedAnnotation=true"]
-   ```
+   - MapStruct: `build/generated/sources/mapstruct` (аналог `target/generated-sources`)
+   - Lombok: Встроено в компилятор
 
-Этот пример сохраняет **все ключевые элементы**:
-- Полноценная мульти-модульная структура
-- Интеграция Lombok/MapStruct с комментариями об аналогах
-- Вынос конфигурации Liquibase в отдельный файл
-- Готовые задачи для работы с миграциями
-- Подробные аналогии с Maven в таблице и комментариях
+Этот пример сохраняет **полную аналогию с Maven**:
+- Все версии централизованы в `gradle.properties`
+- BOM-модуль управляет версиями зависимостей
+- Плагины и задачи соответствуют Maven-аналогам
+- Комментарии объясняют каждую секцию с точки зрения Maven
