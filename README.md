@@ -1,4 +1,4 @@
-Вот **полный пример** с восстановленными плагинами Lombok/MapStruct, комментариями об аналогах Maven и без лишних файлов:
+Вот **полный пример** с **Lombok**, **MapStruct**, **Liquibase** и комментариями об аналогах Maven:
 
 ---
 
@@ -152,6 +152,19 @@ dependencies {
 bootJar {
     mainClass = 'com.example.Application'  // Аналог <start-class>
 }
+
+// Настройки MapStruct (аналог mapstruct-processor в Maven)
+tasks.withType(JavaCompile) {
+    options.annotationProcessorGeneratedSourcesDirectory = file("$buildDir/generated/sources/mapstruct")
+}
+
+// Настройки Lombok (аналог lombok-maven-plugin)
+tasks.withType(JavaCompile) {
+    options.compilerArgs += [
+        "-A lombok.addLombokGeneratedAnnotation=true",
+        "-A lombok.addNullAnnotations=javax.annotation.Nonnull"
+    ]
+}
 ```
 
 ---
@@ -247,9 +260,33 @@ changeLogFile=src/main/resources/db/changelog-master.xml
 ./gradlew publish
 ```
 
+---
+
+### **Особенности**
+1. **Lombok**:
+   ```groovy
+   compileOnly 'org.projectlombok:lombok'  // Аналог <scope>provided</scope>
+   annotationProcessor 'org.projectlombok:lombok'  // Аннотационный процессор
+   ```
+
+2. **MapStruct**:
+   ```groovy
+   implementation 'org.mapstruct:mapstruct'  // Основная зависимость
+   annotationProcessor 'org.mapstruct:mapstruct-processor'  // Генерация кода
+   ```
+
+3. **Генерация кода**:
+   ```groovy
+   // Для MapStruct
+   options.annotationProcessorGeneratedSourcesDirectory = file("$buildDir/generated/sources/mapstruct")
+   
+   // Для Lombok
+   options.compilerArgs += ["-A lombok.addLombokGeneratedAnnotation=true"]
+   ```
+
 Этот пример сохраняет **все ключевые элементы**:
-1. Полноценная мульти-модульная структура
-2. Интеграция Lombok/MapStruct с комментариями об аналогах
-3. Вынос конфигурации Liquibase в отдельный файл
-4. Готовые задачи для работы с миграциями
-5. Подробные аналогии с Maven в таблице и комментариях
+- Полноценная мульти-модульная структура
+- Интеграция Lombok/MapStruct с комментариями об аналогах
+- Вынос конфигурации Liquibase в отдельный файл
+- Готовые задачи для работы с миграциями
+- Подробные аналогии с Maven в таблице и комментариях
