@@ -1,4 +1,4 @@
-Вот полный пример мульти-модульного Gradle-проекта с **Spring Boot**, **MapStruct**, **Lombok**, **Nexus** и централизованным управлением версиями:
+Вот полная конфигурация Gradle-проекта с **Liquibase**, **Spring Boot**, **MapStruct**, **Lombok** и **Nexus**:
 
 ---
 
@@ -11,16 +11,18 @@ parent-project/
 ├── parent/
 │   └── build.gradle
 ├── impl/
-│   ├── build.gradle
-│   └── src/main/java/com/example/...
+│   └── build.gradle
 └── db/
     ├── build.gradle
-    └── src/main/java/com/example/...
+    ├── liquibase.properties
+    └── src/main/resources/db/changelog/
+        ├── changelog-master.xml
+        └── changelog-1.0.xml
 ```
 
 ---
 
-### **`gradle.properties`
+### **`gradle.properties` (версии и настройки)
 ```properties
 # Версии зависимостей
 springBootVersion=3.1.2
@@ -28,11 +30,20 @@ javaVersion=17
 hibernateVersion=6.2.5.Final
 mapstructVersion=1.5.5.Final
 lombokVersion=1.18.30
+postgresqlVersion=42.6.0
+liquibaseVersion=4.23.1
 
 # Nexus репозиторий
 nexusUrl=https://nexus.example.com/repository/maven-releases/
 nexusUser=deployer
 nexusPassword=secure_password_123
+
+# Параметры Liquibase
+db.url=jdbc:postgresql://localhost:5432/mydb
+db.username=postgres
+db.password=mysecretpassword
+db.driver=org.postgresql.Driver
+db.changeLogFile=src/main/resources/db/changelog/changelog-master.xml
 
 # Правила обновления зависимостей
 dependencyChecksums=true
@@ -41,7 +52,7 @@ dependencyCacheDuration=7d
 
 ---
 
-### **`settings.gradle`
+### **`settings.gradle` (модули)
 ```groovy
 include 'parent', 'impl', 'db'
 rootProject.name = 'parent-project'
@@ -55,7 +66,7 @@ plugins {
     id 'java'
     id 'org.springframework.boot' version "${springBootVersion}" apply false
     id 'maven-publish'
-    id 'net.ltgt.apt' version '0.21'  // Для аннотационных процессоров
+    id 'net.ltgt.apt' version '0.21'
 }
 
 java {
@@ -113,7 +124,7 @@ publishing {
 
 ---
 
-### **`parent/build.gradle` (BOM)
+### **`parent/build.gradle` (BOM-модуль)
 ```groovy
 plugins {
     id 'java-platform'
@@ -133,6 +144,7 @@ dependencies {
         
         // Базовые зависимости
         api "com.mysql:mysql-connector-j:8.0.33"
+        api "org.postgresql:postgresql:${postgresqlVersion}"
         api "org.junit.jupiter:junit-jupiter:5.8.1"
         
         // MapStruct
@@ -142,13 +154,16 @@ dependencies {
         // Lombok
         api "org.projectlombok:lombok:${lombokVersion}"
         annotationProcessor "org.projectlombok:lombok:${lombokVersion}"
+        
+        // Liquibase
+        api "org.liquibase:liquibase-core:${liquibaseVersion}"
     }
 }
 ```
 
 ---
 
-### **`impl/build.gradle`
+### **`impl/build.gradle` (модуль реализации)
 ```groovy
 plugins {
     id 'org.springframework.boot'
@@ -201,16 +216,25 @@ bootJar {
 
 ---
 
-### **`db/build.gradle`
+### **`db/build.gradle` (модуль БД с Liquibase)
 ```groovy
+plugins {
+    id 'java'
+    id 'org.liquibase.gradle' version '2.2.0'  // Плагин Liquibase
+}
+
 dependencies {
     implementation platform(project(':parent'))
     
     // Hibernate
     implementation 'org.hibernate:hibernate-core'
     
-    // Базовые зависимости
-    runtimeOnly 'com.mysql:mysql-connector-j'
+    // PostgreSQL
+    runtimeOnly 'org.postgresql:postgresql'
+    
+    // Liquibase
+    liquibaseRuntime 'org.liquibase:liquibase-core'
+    liquibaseRuntime 'org.postgresql:postgresql'
     
     // Lombok
     compileOnly 'org.projectlombok:lombok'
@@ -219,11 +243,86 @@ dependencies {
     // Тесты
     testImplementation 'org.junit.jupiter:junit-jupiter'
 }
+
+// Конфигурация Liquibase
+liquibase {
+    activities {
+        main {
+            changeLogFile = project.property('db.changeLogFile')
+            url = project.property('db.url')
+            username = project.property('db.username')
+            password = project.property('db.password')
+            driver = project.property('db.driver')
+            logLevel = 'info'
+            defaultSchemaName = 'public'
+        }
+    }
+    runList = 'main'
+}
+
+// Задача для выполнения миграций
+task liquibaseUpdate(type: org.liquibase.gradle.LiquibaseTask) {
+    args 'update'
+}
+
+// Задача для отката миграций
+task liquibaseRollback(type: org.liquibase.gradle.LiquibaseTask) {
+    args 'rollbackCount', '1'
+}
 ```
 
 ---
 
-### **`~/.gradle/init.gradle` (глобальные настройки)
+### **`db/liquibase.properties`
+```properties
+url=jdbc:postgresql://localhost:5432/mydb
+username=postgres
+password=mysecretpassword
+driver=org.postgresql.Driver
+changeLogFile=src/main/resources/db/changelog/changelog-master.xml
+```
+
+---
+
+### **`db/src/main/resources/db/changelog/changelog-master.xml`
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+    http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.23.xsd">
+
+    <include file="changelog-1.0.xml" relativeToChangelogFile="true"/>
+</databaseChangeLog>
+```
+
+---
+
+### **`db/src/main/resources/db/changelog/changelog-1.0.xml`
+```xml
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+    xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+    http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-4.23.xsd">
+
+    <changeSet id="1" author="dev">
+        <createTable tableName="users">
+            <column name="id" type="bigint" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="name" type="varchar(255)"/>
+            <column name="email" type="varchar(255)"/>
+        </createTable>
+    </changeSet>
+</databaseChangeLog>
+```
+
+---
+
+### **`~/.gradle/init.gradle` (глобальные настройки Nexus)
 ```groovy
 allprojects {
     repositories {
@@ -240,86 +339,44 @@ allprojects {
 
 ---
 
-### **Пример кода с MapStruct и Lombok**
+### **Ключевые возможности**
+1. **Liquibase**:
+   ```bash
+   # Выполнить миграции
+   ./gradlew :db:liquibaseUpdate
+   
+   # Откатить последнюю миграцию
+   ./gradlew :db:liquibaseRollback
+   ```
 
-#### **User.java (с Lombok)**
-```java
-package com.example.model;
+2. **Параметризация**:
+   ```bash
+   # Переопределение параметров через командную строку
+   ./gradlew build -Pdb.url=jdbc:postgresql://prod-db:5432/mydb
+   ```
 
-import lombok.Data;
-
-@Data
-public class User {
-    private Long id;
-    private String name;
-    private String email;
-}
-```
-
-#### **UserDto.java**
-```java
-package com.example.dto;
-
-public class UserDto {
-    private String name;
-    private String email;
-}
-```
-
-#### **UserMapper.java (с MapStruct)**
-```java
-package com.example.mapper;
-
-import com.example.dto.UserDto;
-import com.example.model.User;
-import org.mapstruct.Mapper;
-import org.mapstruct.factory.Mappers;
-
-@Mapper
-public interface UserMapper {
-    UserMapper INSTANCE = Mappers.getMapper(UserMapper.class);
-    UserDto toDto(User user);
-}
-```
+3. **Публикация в Nexus**:
+   ```bash
+   ./gradlew publish
+   ```
 
 ---
 
-### **Ключевые аналогии с Maven**
+### **Аналогии с Maven**
 | **Maven**                          | **Gradle**                                      |
 |------------------------------------|------------------------------------------------|
 | `<properties>`                     | `gradle.properties` + `ext`                    |
 | `<dependencyManagement>`           | Модуль BOM с `java-platform`                   |
 | `maven-compiler-plugin`            | `java.toolchain.languageVersion`               |
-| `lombok-maven-plugin`              | `compileOnly` + `annotationProcessor`          |
-| `mapstruct-processor`              | `annotationProcessor` + `net.ltgt.apt` плагин  |
-| `<repositories>` + `<servers>`     | `repositories { maven { credentials { ... } }` |
+| `liquibase-maven-plugin`           | `org.liquibase.gradle`                         |
 | `<distributionManagement>`         | `publishing { repositories { ... } }`          |
 
 ---
 
-### **Особенности**
-1. **Кэширование зависимостей**:
-   ```groovy
-   cacheDynamicVersionsFor 7, 'days'  // Кэширование SNAPSHOT-версий
-   ```
-
-2. **Генерация кода**:
-   - MapStruct: `src/main/java` → `build/generated/sources/annotationProcessor/java`
-   - Lombok: Генерация геттеров/сеттеров на лету
-
-3. **Публикация в Nexus**:
-   ```bash
-   ./gradlew publish  # Аналог mvn deploy
-   ```
-
-4. **Компиляция**:
-   ```bash
-   ./gradlew build  # Аналог mvn clean install
-   ```
-
-Этот пример демонстрирует:
-- Полную интеграцию Spring Boot, MapStruct и Lombok
-- Работу с приватным Nexus репозиторием
+Этот пример включает:
+- Полноценную мульти-модульную структуру
 - Централизованное управление версиями через BOM
-- Настройки кэширования и проверки зависимостей
-- Генерацию исходного кода через аннотационные процессоры
+- Интеграцию Liquibase с PostgreSQL
+- Работу с приватным Nexus
+- Настройки для Spring Boot, MapStruct и Lombok
+- Готовые задачи для миграций и публикации
